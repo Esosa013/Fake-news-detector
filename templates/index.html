@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fake News Detector</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.17.0/ort.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">Fake News Detector</h1>
+            <p class="text-gray-600">Powered by Advanced AI Technology</p>
+        </header>
+
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <div class="mb-6">
+                <label for="newsInput" class="block text-sm font-medium text-gray-700 mb-2">
+                    Enter news headline or article
+                </label>
+                <textarea id="newsInput" rows="6"
+                    class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    placeholder="Paste your news text here..."></textarea>
+            </div>
+
+            <div class="flex justify-between items-center mb-8">
+                <button id="clearBtn"
+                    class="px-4 py-2 text-gray-600 hover:text-gray-800 focus:outline-none transition-colors">
+                    <i class="fas fa-trash-alt mr-2"></i>Clear
+                </button>
+                <button id="analyzeBtn"
+                    class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                    <i class="fas fa-search mr-2"></i>Analyze Text
+                </button>
+            </div>
+
+            <div id="resultsSection" class="hidden">
+                <div class="border-t border-gray-200 pt-6">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Analysis Results</h2>
+
+                    <div class="bg-gray-50 rounded-lg p-6 mb-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Prediction</p>
+                                <p id="predictionText" class="text-2xl font-bold"></p>
+                            </div>
+                            <div id="predictionIcon" class="text-4xl"></div>
+                        </div>
+                        <div id="explanationBox" class="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+                            <p class="text-sm text-gray-600 mb-1">Analysis Explanation</p>
+                            <p id="explanationText" class="text-gray-800"></p>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <p class="text-sm text-gray-600 mb-2">Confidence Score</p>
+                        <div class="relative pt-1">
+                            <div class="flex mb-2 items-center justify-between">
+                                <div>
+                                    <span id="confidenceScore"
+                                        class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200">
+                                        0%
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200">
+                                <div id="confidenceBar"
+                                    class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-blue-500"
+                                    style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6">
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">How it Works</h3>
+                <p class="text-gray-600">Our advanced AI model analyzes news content using natural language processing to
+                    identify patterns associated with fake news. The system evaluates various factors including language
+                    patterns, source credibility, and content consistency.</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">Tips for Usage</h3>
+                <p class="text-gray-600">For best results, enter complete headlines or article text. The more context
+                    provided, the more accurate the analysis will be. Remember that this tool should be used as part of a
+                    broader fact-checking process.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const newsInput = document.getElementById('newsInput');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const resultsSection = document.getElementById('resultsSection');
+        const predictionText = document.getElementById('predictionText');
+        const predictionIcon = document.getElementById('predictionIcon');
+        const confidenceScore = document.getElementById('confidenceScore');
+        const confidenceBar = document.getElementById('confidenceBar');
+        const explanationText = document.getElementById('explanationText');
+
+        analyzeBtn.addEventListener('click', analyzeText);
+        clearBtn.addEventListener('click', clearInput);
+
+        function clearInput() {
+            newsInput.value = '';
+            resultsSection.classList.add('hidden');
+        }
+
+        function analyzeText() {
+            const text = newsInput.value.trim();
+
+            if (!text) {
+                alert('Please enter some text to analyze');
+                return;
+            }
+
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing...';
+
+            fetch('http://127.0.0.1:5000/api/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text: text
+                })
+            })
+                .then(response => response.json())
+                .then(response => {
+                    console.log('API Response:', response);
+
+                    if (response.status === 'success' && response.data) {
+                        displayResults(
+                            response.data.prediction,
+                            response.data.confidence,
+                            response.data.explanation
+                        );
+                    } else if (response.error) {
+                        alert(response.error);
+                    } else {
+                        throw new Error('Invalid response format');
+                    }
+
+                    analyzeBtn.disabled = false;
+                    analyzeBtn.innerHTML = '<i class="fas fa-search mr-2"></i>Analyze Text';
+                })
+                .catch(error => {
+                    console.error('API Error:', error);
+                    alert('Error: ' + error);
+                    analyzeBtn.disabled = false;
+                    analyzeBtn.innerHTML = '<i class="fas fa-search mr-2"></i>Analyze Text';
+                });
+        }
+
+        function displayResults(prediction, confidence, explanation) {
+            resultsSection.classList.remove('hidden');
+
+            const isFake = prediction === 'FAKE';
+
+            predictionText.textContent = isFake ? 'FAKE NEWS' : 'REAL NEWS';
+            predictionText.className = `text-2xl font-bold ${isFake ? 'text-red-600' : 'text-green-600'}`;
+            predictionIcon.innerHTML = isFake ? '❌' : '✅';
+
+            confidenceScore.textContent = `${confidence}%`;
+            confidenceBar.style.width = `${confidence}%`;
+            confidenceBar.className = `shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center ${
+                isFake ? 'bg-red-500' : 'bg-green-500'
+            }`;
+
+            explanationText.textContent = explanation || 'No detailed explanation available';
+            explanationText.className = 'text-gray-800 text-sm leading-relaxed';
+        }
+    </script>
+</body>
+
+</html>
